@@ -18,7 +18,7 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 # === Configuration ===
-JINA_API_KEY = "jina_749fcb059c2f422d8ea05b9a1b95f693V5KvVT-7_eUEcs4C3WsyKX-lJJ_M"
+JINA_API_KEY = "JINA_API_KEY"
 QDRANT_URL = "http://192.168.1.13:6333"
 COLLECTION_NAME = "finance_docs"
 K = 15
