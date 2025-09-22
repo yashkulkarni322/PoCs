@@ -5,7 +5,7 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # API Keys
-    jina_api_key: str = "jina_749fcb059c2f422d8ea05b9a1b95f693V5KvVT-7_eUEcs4C3WsyKX-lJJ_M"
+    jina_api_key: str
     
     # Database Configuration
     qdrant_url: str = "http://192.168.1.13:6333"
