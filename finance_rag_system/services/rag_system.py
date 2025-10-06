@@ -12,7 +12,6 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-
 class RAGSystem:
     def __init__(self):
         self.client = QdrantClient(url=settings.qdrant_url, check_compatibility=False)
@@ -70,12 +69,19 @@ class RAGSystem:
     
     def _setup_prompts(self):
         """Setup prompt templates"""
-        self.finance_prompt = self._create_finance_prompt()
-        self.chat_prompt = self._create_chat_prompt()
+        # Separate prompts for insights vs anomalies for finance and chat
+        self.finance_insights_prompt = self._create_finance_insights_prompt()
+        self.finance_anomalies_prompt = self._create_finance_anomalies_prompt()
+        self.chat_insights_prompt = self._create_chat_insights_prompt()
+        self.chat_anomalies_prompt = self._create_chat_anomalies_prompt()
         self.general_prompt = self._create_general_prompt()
     
     def _create_finance_prompt(self) -> ChatPromptTemplate:
         """Create finance analysis prompt template"""
+        # Deprecated: replaced by separate insights/anomalies prompts
+        return self._create_finance_insights_prompt()
+
+    def _create_finance_insights_prompt(self) -> ChatPromptTemplate:
         template = """
         Using the financial documents provided, generate comprehensive insights using the schema below:
 
@@ -107,9 +113,26 @@ class RAGSystem:
         Provide detailed financial insights based on the above schema.
         """
         return ChatPromptTemplate.from_template(template)
+
+    def _create_finance_anomalies_prompt(self) -> ChatPromptTemplate:
+        template = """
+        From the provided financial documents, list ANOMALIES and RISK INDICATORS. For each item include:
+        - Why it's anomalous (short rationale)
+        - Potential risk level: Low/Medium/High
+        - Suggested next steps
+
+        Output as bullet points. Prepend each bullet with the risk level in brackets.
+
+        Context: {context}
+        Query: {question}
+        """
+        return ChatPromptTemplate.from_template(template)
     
     def _create_chat_prompt(self) -> ChatPromptTemplate:
         """Create chat analysis prompt template"""
+        return self._create_chat_insights_prompt()
+
+    def _create_chat_insights_prompt(self) -> ChatPromptTemplate:
         template = """
         Analyze the chat conversations provided to generate user profiling and anomaly detection insights:
 
@@ -133,6 +156,21 @@ class RAGSystem:
         Query: {question}
         
         Provide comprehensive chat analysis and user profiling insights.
+        """
+        return ChatPromptTemplate.from_template(template)
+
+    def _create_chat_anomalies_prompt(self) -> ChatPromptTemplate:
+        template = """
+        From the chat logs, list ANOMALIES or SUSPICIOUS BEHAVIORS. For each include:
+        - Short description
+        - Why it's unusual
+        - Risk level: Low/Medium/High
+        - Suggested follow-up
+
+        Return only bullet points. No tables.
+
+        Context: {context}
+        Query: {question}
         """
         return ChatPromptTemplate.from_template(template)
     
@@ -236,12 +274,21 @@ class RAGSystem:
     def analyze_finance_docs(self, query: str, store_insights: bool = True) -> Dict[str, Any]:
         """Analyze financial documents and generate insights"""
         try:
-            result = self._generate_response(self.finance_prompt, query, "finance")
-            
+            # Generate INSIGHTS
+            result = self._generate_response(self.finance_insights_prompt, query, "finance")
+
             if store_insights and result["answer"]:
                 result["insights_stored"] = self._store_insights(
-                    query, result["answer"], "finance_insights"
+                    query, result["answer"], "insights"
                 )
+
+            anomalies = self._generate_response(self.finance_anomalies_prompt, query, "finance")
+            if store_insights and anomalies.get("answer"):
+                result["anomalies_stored"] = self._store_insights(
+                    query, anomalies["answer"], "anomalies"
+                )
+            else:
+                result["anomalies_stored"] = 0
             
             return result
         except Exception as e:
@@ -251,12 +298,22 @@ class RAGSystem:
     def analyze_chats(self, query: str, store_insights: bool = True) -> Dict[str, Any]:
         """Analyze chat conversations"""
         try:
-            result = self._generate_response(self.chat_prompt, query, "chat")
-            
+            # Generate chat INSIGHTS
+            result = self._generate_response(self.chat_insights_prompt, query, "chat")
+
             if store_insights and result["answer"]:
                 result["insights_stored"] = self._store_insights(
-                    query, result["answer"], "chat_insights"
+                    query, result["answer"], "insights"
                 )
+
+            # Generate chat ANOMALIES separately
+            anomalies = self._generate_response(self.chat_anomalies_prompt, query, "chat")
+            if store_insights and anomalies.get("answer"):
+                result["anomalies_stored"] = self._store_insights(
+                    query, anomalies["answer"], "anomalies"
+                )
+            else:
+                result["anomalies_stored"] = 0
             
             return result
         except Exception as e:
