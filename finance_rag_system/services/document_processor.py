@@ -9,7 +9,6 @@ import re
 
 logger = setup_logger(__name__)
 
-
 class DocumentProcessor:
     def __init__(self):
         self.qdrant_service = QdrantService()
@@ -35,7 +34,7 @@ class DocumentProcessor:
             elif content_type == "finance":
                 return self._chunk_finance_data(texts)
             elif content_type == "others":
-                return self._chunk_html_fixed(texts)  # ✅ new HTML strategy
+                return self._chunk_html_fixed(texts)  
             else:
                 return self._chunk_generic_text(texts)
         except Exception as e:
@@ -173,6 +172,13 @@ class DocumentProcessor:
     def ingest_text_insights(self, insights_text: str, content_type: str) -> int:
         """Ingest generated insights as text chunks"""
         try:
+            # For insights/anomalies we must NOT chunk the generated text.
+            # Store the entire insights/anomalies text as a single chunk/point.
+            if content_type in ("insights", "anomalies"):
+                single_chunk = [insights_text]
+                logger.info("Ingesting insights/anomalies as a single chunk")
+                return self._ingest_text_chunks(single_chunk, content_type)
+
             all_chunks = self.chunk_text([insights_text], content_type)
             logger.info(f"Total insight chunks: {len(all_chunks)}")
             if not all_chunks:
